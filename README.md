@@ -1,7 +1,7 @@
 # vimc-subnational-MCV1
 
-Related to manuscript Exploring the subnational inequality and heterogeneity of
-the impact of routine measles immunisation in Africa
+Related to the manuscript: **Exploring the subnational inequality and heterogeneity of
+the impact of routine measles immunisation in Africa**
 
 This repository contains the code used to process the coverage estimates and impact estimates and produce the figures shown in the manuscript.
 
