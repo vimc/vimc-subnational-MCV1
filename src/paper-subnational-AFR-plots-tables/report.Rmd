@@ -1,0 +1,758 @@
+---
+title: "Impact estimates under different scenarios of coverage heterogeneity in Sub-Saharan Africa"
+author: "Susy Echeverria-Londono"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default 
+fontsize: 11
+header-includes:
+  \usepackage{fancyhdr}
+  \pagestyle{fancy}
+  \fancyhead[LE,RO]{QCR impact}
+---
+  
+`r as.character(format(Sys.Date(), format="%B %d, %Y"))`
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = FALSE,
+                      error = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      tidy = FALSE, 
+                      fig.path = '',
+                      fig.keep = 'high',
+                      dev = c('png'),
+                      dpi = 300,
+                      fig.width = 12,
+                      fig.height = 10,
+                      #fig.cap = F1_cap,
+                      fig.align = 'center',
+                      out.width = "\\textwidth")
+figure_nums <- captioner::captioner(prefix = "Figure")
+table_nums <- captioner::captioner(prefix = "Table")
+options(dplyr.summarise.inform = FALSE)
+```
+
+```{r data, include = FALSE}
+#1. Coverage data
+## national coverage
+cov_comparison <- readRDS("./dat/national_coverage_IHME_vs_201910gavi.RDS")
+cov_scenarios <- readRDS("./dat/coverage_under_scenarios.RDS")
+
+## Adjusted coverage adm1
+MCV1_cov2_new <- readRDS("./dat/normalised_fvps_coverage.RDS")
+cov_adjust_samples <- readRDS("./dat/normalised_coverage_uncertainty.RDS")
+
+# 2. Population data
+pop_dat <- readRDS("./dat/processed_pop_dat.RDS")
+
+# 2. Impact estimates national level for inequality scenarios
+impact_df_cohort <- readRDS("./dat/impact_inequality_scenarios.RDS")
+
+# 3. Impact estimates subnational level 2019
+change_impact_2019 <- readRDS("./dat/Change_impact_national_2019.RDS")
+
+# 4. Relative change of impact 
+glob_rel_ch <- readRDS("./dat/glob_rel_ch.RDS")
+nat_rel_ch <- readRDS("./dat/nat_rel_ch.RDS")
+sub_rel_ch <- readRDS("./dat/sub_rel_ch.RDS")
+
+# 5. Relative change of impact from samples
+ch_impact_samples <- readRDS("./dat/ch_impact_samples_2019.RDS")
+
+# 6. Dissimilarity index
+dissimilarity_all <- readRDS("./dat/dissimilarity_2000_2019.RDS")
+
+#5. Normalised fvps and coverage 
+MCV1_cov_norm <- readRDS("./dat/normalised_fvps_coverage.RDS")
+
+mean_cov_df <- 
+MCV1_cov_norm %>% 
+  group_by(iso3, year) %>% 
+  summarise(mean_cov = mean(mean_cov, na.rm = TRUE))
+
+### Include country names
+country_names <- 
+  tbl(con, "country") %>% 
+  distinct(id,name) %>% 
+  collect() %>% 
+  dplyr::rename(iso3 = id) %>% 
+  mutate(name = ifelse(iso3 == "COD", "Congo, DR", name)) %>% 
+  mutate(name = ifelse(iso3 == "TZA", "Tanzania", name)) 
+
+#6. African map with admin1 divisions
+AF_maps <- readRDS("./dat/AFR_maps.RDS")
+
+adm0_map <- AF_maps$adm0
+adm1_map <- AF_maps$adm1
+
+# 7. Deaths averted rates by region and country
+impact_ratios <- read.csv("./dat/deaths_averted_rate_2000_2019.csv")
+impact_ratios_dist <- readRDS("./dat/deaths_averted_rate_ranges.RDS")
+
+# 8. adm1 impact estimates 
+impact_ADM1 <- read.csv ("dat/impact_ADM1_per_year.csv")
+```
+
+```{r}
+## Join impact estimates with population data in 2019
+impact_2019_pop <- 
+  sub_rel_ch$p_split_2000_2019 %>% 
+  filter(scenario == "sub_cov") %>% 
+   filter(period == 2019) %>% 
+  select(iso3, ADM1_NAME, deaths_averted_new_mean, total_pop) %>% 
+  mutate(impact_pop = deaths_averted_new_mean/total_pop*1e5)
+
+# Prepare dataframes for the plots
+ref_d <- 
+  dissimilarity_all %>% 
+  filter(year == 2019) %>% 
+  select(iso3, INS_mean, WID_mean)
+
+df_plot <- 
+  impact_2019_pop %>% 
+  left_join(country_names) %>% 
+  filter(iso3 != "IND") %>%
+  group_by(iso3) %>% 
+  mutate(mean_impact = mean(impact_pop))
+
+```
+
+
+## Comparing the original IHME national coverage vs the 201910gavi coverage. 
+
+```{r cov_comparison_plot}
+cov_comparison %>% 
+  ggplot(aes(x = year, y = cov, linetype = source, colour = source))+
+  geom_line()+
+  facet_wrap(.~iso3)+
+  theme_bw()
+```
+
+## Coverage figures
+
+```{r check_adjusted_anadjusted_cov}
+MCV1_cov2_new %>%
+  select(-adjusted_fvps, -unadjusted_fvps) %>% 
+  rename(adjusted = mean_cov, 
+         unadjusted = unadjusted_cov) %>% 
+  pivot_longer(names_to = "scn", values_to = "values", cols = adjusted:unadjusted) %>% 
+  group_by(iso3, year, scn) %>% 
+  summarise(mean_cov = mean(values, na.rm = TRUE)) %>% 
+  mutate(scn = fct_relevel(scn, "unadjusted", "adjusted")) %>% 
+  
+  ggplot(aes(x = year, y = mean_cov, linetype = scn, colour = scn))+
+  geom_line()+
+  facet_wrap(.~iso3)+
+  theme_bw()+
+  ylab("Coverage")+
+  xlab("Year")+
+  labs(linetype = "")+
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+## Coverage tables
+
+```{r include = FALSE}
+cov_scenarios_nat <- 
+  cov_scenarios$cov_scenarios %>% 
+  filter(scenario == "sub_cov") %>% 
+  rename(sub_cov  = new_cov) %>% 
+  select(-scenario)
+
+cov_scenarios_all <- 
+  cov_scenarios$cov_scenarios %>% 
+  filter(scenario%in%c("at_nat_cov", "max_cov", "at_gvap_cov"))
+
+tag_iso <- 
+cov_scenarios_nat %>% 
+  left_join(cov_scenarios_all) %>% 
+  mutate(diff = round((new_cov - sub_cov)*100)) %>% 
+  mutate(more_10 = ifelse(diff > 10, "*", "--"))
+
+tag_iso_check <- 
+  tag_iso %>% 
+  filter(more_10 == "*") %>% 
+  mutate(scenario = paste0("SI_", scenario)) %>% 
+  ungroup() %>% 
+  select(iso3, scenario, more_10) %>% 
+  pivot_wider(names_from = scenario, values_from = more_10)
+  
+```
+
+
+```{r cov_scenario_table}
+cov_scenarios_tab <- 
+  cov_scenarios$cov_scenarios %>% 
+  left_join(tag_iso_check) %>% 
+  ungroup() %>% 
+  select(-year) %>% 
+  mutate(new_cov = new_cov * 100) %>% 
+  mutate(new_cov = ifelse(new_cov > 100, 100, new_cov)) %>% 
+  pivot_wider(names_from = scenario, values_from = new_cov) %>% 
+  left_join(country_names) %>% 
+  rename(nat_cov = sub_cov) %>% 
+  select(name, nat_cov, at_nat_cov, max_cov, at_gvap_cov, contains("SI")) %>% 
+  arrange(name) 
+  
+
+print(xtable(cov_scenarios_tab, type = "latex"), 
+      file = "cov_scenarios_tab_2019.tex", 
+      include.rownames=FALSE)
+
+write.csv(cov_scenarios_tab, "cov_scenarios_tab_2019.csv", row.names = FALSE)
+write.csv(cov_scenarios$cov_scenarios_global, "cov_scenarios_global_2019.csv", row.names = FALSE)
+```
+
+# Reducing inequality scenarios 
+
+## Time series {.tabset}
+### Subnational vs national
+```{r sub_cov_rib}
+
+col_pal <- c("grey", wes_palette("Zissou1"))
+
+impact_df_cohort %>% 
+  filter(year%in%2000:2019) %>% 
+  mutate(scenario = ifelse(scenario == "VIMC", "National",
+                           ifelse(scenario == "sub_cov", "Mean subnational", scenario))) %>% 
+  plot_ribbons(scen_to_plot = c("National", "Mean subnational"), col_pal = col_pal[c(1,4)])
+```
+
+### At least national
+
+```{r at_nat_cov_rib}
+
+impact_df_cohort$scenario <- fct_relevel(impact_df_cohort$scenario, "sub_cov")
+
+impact_df_cohort %>% 
+  plot_ribbons(scen_to_plot = c("sub_cov", "at_nat_cov"), col_pal = col_pal[c(1,2)])
+
+```
+
+### Max coverage achieve each year
+
+```{r max_cov_rib}
+impact_df_cohort %>% 
+  plot_ribbons(scen_to_plot = c("sub_cov", "max_cov"), col_pal = col_pal[c(1,5)])
+
+```
+
+### GVAP target 
+
+```{r gvap_cov_rib}
+impact_df_cohort %>% 
+  plot_ribbons(scen_to_plot = c("sub_cov", "at_gvap_cov"), col_pal = col_pal[c(1,6)])
+
+```
+
+
+### Deaths averted and scaled index of similarity 
+```{r, impact_dist}
+p1 <-
+  df_plot  %>% 
+  ggplot(aes(y = reorder(name, mean_impact), x = impact_pop, colour = scenario)) +
+  stat_interval(aes(color_ramp = stat(level)), colour = "#00A08A")+
+  stat_gradientinterval(colour = "#343A40")+
+  theme_bw(14)+
+  ylab("")+
+  xlab("Deaths averted (per 100K)")+
+  labs(fill = "")+
+  theme(legend.position = c(0.87, 0.15))
+
+
+p2 <- 
+  ref_d %>% 
+  left_join(country_names) %>% 
+  left_join(df_plot %>% distinct(iso3, mean_impact)) %>% 
+  mutate(Index = "") %>% 
+  ggplot(aes(y = reorder(name, mean_impact), x = WID_mean))+
+  geom_col(fill = "#00A08A")+
+  theme_bw(14)+
+  xlab("Inequality %")+
+  ylab("")+
+  theme(legend.position = "bottom")+
+  theme(axis.text.y = element_blank())
+
+cowplot::plot_grid(p1,p2, align = "h")
+```
+
+```{r summary_change_impact}
+col_pal2 <- c("grey", wes_palette("Zissou1"))
+
+bar_plot_combine(rel_ch_df = change_impact_2019, 
+                 ref_order = ref_d,
+                 ref_scenario = "sub_cov" ,
+                 scenario_im = c("at_nat_cov", "max_cov", "at_gvap_cov"), 
+                 col_pal = col_pal2[c(1,2,5,6)])
+```
+
+
+```{r index_dissimilarity, fig.height = 12, fig.width= 16}
+
+dat_tmp <- 
+  dissimilarity_all %>% 
+  ungroup() %>% 
+  mutate(INS_scale = INS_mean/max(INS_mean)) %>% 
+  left_join(mean_cov_df) %>% 
+  mutate(INS_scale = round(INS_scale, 2)) %>% 
+  mutate(mean_cov = round(mean_cov, 2))
+
+
+coeff <- max(dat_tmp$INS_scale)*max(dat_tmp$mean_cov)
+
+dat_tmp %>% 
+  ggplot(aes(x = year, y = INS_scale))+
+  geom_line(size = 1.2)+
+  geom_line(aes(y= mean_cov*coeff), size = 1.2, color=col_pal2[2])+
+  #geom_ribbon(aes(ymin =mean_cov*coeff,  ymax = INS_hi), alpha = 0.5)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, NA),
+    
+    # Add a second axis and specify its features
+  sec.axis = sec_axis(~./coeff, name="Coverage"))+
+  facet_wrap(.~iso3)+
+  theme_minimal(14)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1), 
+        axis.title.y.right=element_text(color=col_pal2[2], vjust=2, face="bold"), 
+        axis.text.y.right =element_text(colour=col_pal2[2]))+
+  xlab("Year") +
+  ylab("Inequality")+
+  theme(panel.spacing = unit(1, "lines"))
+
+dis_dat <-
+  dissimilarity_all %>% 
+  left_join(mean_cov_df) %>% 
+  mutate(WID_mean = round(WID_mean/100, 2)) %>% 
+  mutate(mean_cov = round(mean_cov, 2)) %>% 
+  mutate(mean_cov = mean_cov)
+
+coeff2 <- max(dis_dat$WID_mean)*max(dis_dat$mean_cov)
+
+dis_dat %>% 
+  ggplot(aes(x = year, y = WID_mean))+
+  geom_line(size = 1.2)+
+  geom_line(aes(y= mean_cov*coeff2), size = 1.2, color=col_pal2[2])+
+  #geom_ribbon(aes(ymin =mean_cov*coeff,  ymax = INS_hi), alpha = 0.5)+
+  scale_y_continuous(expand = c(0, 0), limits = c(0, NA),
+    
+    # Add a second axis and specify its features
+  sec.axis = sec_axis(~./coeff2, name="Coverage"))+
+  facet_wrap(.~iso3)+
+  theme_minimal(14)+
+  theme(axis.text.x = element_text(angle = 90, vjust = 1, hjust=1), 
+        axis.title.y.right=element_text(color=col_pal2[2], vjust=2, face="bold"), 
+        axis.text.y.right =element_text(colour=col_pal2[2]))+
+  xlab("Year") +
+  ylab("Inequality")+
+  theme(panel.spacing = unit(1, "lines"))
+```
+
+```{r include = FALSE}
+write.csv(dat_tmp, "inequality_values_2000_2019.csv", row.names = FALSE)
+```
+
+### Impact change (2000:2019)
+
+```{r, include=FALSE}
+all_2000_2019_tmp <- get_map_dat(dat_ch = sub_rel_ch$p_2000_2019$rel_ch, 
+                                 scenario_name  = c("at_nat_cov", "max_cov", "at_gvap_cov"), 
+                                 pop_dat = pop_dat$live_births %>% rename(total_pop = adjusted_liveB), 
+                                 period = 2000:2019, 
+                                 ref_scale = 1e5) 
+
+all_2000_2019 <- 
+  all_2000_2019_tmp %>% 
+  mutate(scenario = case_when(scenario == "at_nat_cov" ~ "At least national", 
+                              scenario == "max_cov" ~ "Regional max", 
+                              scenario == "at_gvap_cov" ~ "GVAP target"))
+
+
+all_2000_2019$scenario <- fct_relevel(all_2000_2019$scenario, 
+                                      "At least national", "Regional max", "GVAP target")
+
+```
+
+
+```{r rc_all_map, message = FALSE, warning = FALSE, fig.width= 20}
+all_2000_2019 %>% 
+  plot_map_all(adm1_map = adm1_map, adm0_map = adm0_map, var_name = "dif_wpop", legend_name = "Additional impact per 100K")
+```
+
+### Impact change (2019)
+
+```{r, include=FALSE}
+all_2019_tmp <- get_map_dat(dat_ch = sub_rel_ch$p_2019$rel_ch, 
+                            scenario_name  = c("at_nat_cov", "max_cov", "at_gvap_cov"), 
+                            pop_dat = pop_dat$live_births %>% rename(total_pop = adjusted_liveB), 
+                            period = 2019, 
+                            ref_scale = 1e5) 
+
+all_2019 <- 
+  all_2019_tmp %>% 
+  mutate(scenario = case_when(scenario == "at_nat_cov" ~ "At least national", 
+                              scenario == "max_cov" ~ "Regional max", 
+                              scenario == "at_gvap_cov" ~ "GVAP target"))
+
+all_2019$scenario <- fct_relevel(all_2019$scenario, "At least national", "Regional max", "GVAP target")
+
+```
+
+
+```{r rc_all_map_2019, message = FALSE, warning = FALSE, fig.width = 16}
+p_gains <- 
+  all_2019 %>% 
+  plot_map_all(adm1_map = adm1_map, adm0_map = adm0_map, var_name = "dif_wpop", legend_name = "Additional \nimpact per 100K")
+
+p_gains
+```
+
+```{r adjusted_cov_figs, fig.width = 16}
+years_ts <- c(seq(2000, 2019, 3))
+
+cov_dis <- 
+  MCV1_cov2_new %>% 
+  violin_plots_vaccines(years = years_ts, 
+                        col_pal = "#00AFBB")
+
+cov_map <- 
+  MCV1_cov2_new %>% 
+  filter(iso3%in%unique(all_2019$iso3)) %>% 
+  filter(year == 2019) %>% 
+  mutate(cov = mean_cov * 100) %>% 
+  plot_map_unique(adm1_map = adm1_map, adm0_map = adm0_map, var_name = "cov", legend_name = "Adjusted coverage %")
+
+cov_map + cov_dis +  plot_layout(ncol = 2, widths = c(1.5, 3))+ plot_annotation(tag_levels = 'A')
+
+```
+
+\newpage
+
+
+## Main tables
+
+```{r include=FALSE}
+tab_df <- 
+  nat_rel_ch$p_split_2000_2019 %>% 
+  filter(iso3!="IND") %>%
+  filter(scenario%in%c("sub_cov","at_nat_cov", "max_cov", "at_gvap_cov")) %>% 
+  mutate_at(vars(contains("deaths_averted")), ~./total_pop*1e5) %>% 
+  mutate_at(vars(contains("deaths_averted")), ~round(.)) %>%
+  mutate_at(vars(contains("deaths_averted")), ~prettyNum(.,big.mark=",")) %>% 
+  arrange(iso3, desc(deaths_averted_new_mean)) %>% 
+  mutate(values = paste0(deaths_averted_new_mean, 
+                         " (", deaths_averted_new_q1, "–", 
+                         deaths_averted_new_q3, ")")) %>% 
+  select(iso3, scenario, period, values) %>% 
+  pivot_wider(names_from = scenario, values_from = values) %>% 
+  select(iso3, period, sub_cov, at_nat_cov, max_cov, at_gvap_cov) %>% 
+  arrange(iso3, period)
+
+tab_df_2019 <-
+  tab_df %>% 
+  filter(period == "2019") %>% 
+  left_join(country_names) %>% 
+  ungroup() %>% 
+  select(Country = name, contains("cov")) %>% 
+  arrange(Country)
+
+tab_df_2000_2019 <-
+  tab_df %>% 
+  filter(period != "2019") %>% 
+  left_join(country_names) %>% 
+  ungroup() %>% 
+  select(Country = name, period, contains("cov")) %>% 
+  arrange(Country, period)
+
+## Print tables
+## only 2019
+print(xtable(tab_df_2019, type = "latex"), 
+      file = "impact_pop_scenarios_2019.tex", 
+      include.rownames=FALSE)
+
+write.csv(tab_df_2019, "impact_pop_scenarios_2019.csv", row.names = FALSE)
+
+## Per period
+print(xtable(tab_df_2000_2019, type = "latex"), 
+      file = "impact_pop_scenarios_2000_2019.tex", 
+      include.rownames=FALSE)
+
+write.csv(tab_df_2000_2019, "impact_pop_scenarios_2000_2019.csv", row.names = FALSE)
+
+
+#### Table for regional impact
+tab_df_admin1 <- 
+  sub_rel_ch$p_split_2000_2019 %>% 
+  filter(iso3!="IND") %>%
+  filter(scenario%in%c("sub_cov","at_nat_cov", "max_cov", "at_gvap_cov")) %>% 
+  mutate_at(vars(contains("deaths_averted")), ~./total_pop*1e5) %>% 
+  mutate_at(vars(contains("deaths_averted")), ~round(.)) %>%
+  mutate_at(vars(contains("deaths_averted")), ~prettyNum(.,big.mark=",")) %>% 
+  arrange(iso3, scenario, desc(deaths_averted_new_mean)) %>% 
+  select(iso3, 
+         ADM1_NAME = ADM1_NAME_VIMC, 
+         ADM1_CODE = ADM1_NAME, scenario, period, contains("deaths_averted")) %>% 
+  mutate(ADM1_NAME = str_to_title(ADM1_NAME)) %>% 
+  arrange(iso3, ADM1_NAME)
+  
+
+write.csv(tab_df_admin1, "impact_ADM1_2000_2019_per_pop.csv", row.names = FALSE)
+```
+
+```{r}
+tab_df_2000_2019 %>% 
+  ungroup() %>% 
+  datatable(caption = "Table 1. Total deaths averted (in thousands) with MCV1 vaccination from 2000-2019") 
+```
+
+## Adjusted population
+
+```{r check_adjusted_anadjusted_pop}
+iso_get <- unique(impact_df_cohort$iso3)
+
+pop_dat$total %>% 
+  filter(year%in%2000:2019) %>% 
+  filter(iso3%in%iso_get) %>% 
+  
+  ungroup() %>% 
+  group_by(iso3, year) %>% 
+  summarise(total_pop = sum(total_pop, na.rm = TRUE), 
+            unadjusted = sum(unadjusted, na.rm = TRUE)) %>% 
+  rename(adjusted = total_pop) %>% 
+  pivot_longer(names_to = "scn", values_to = "values", cols = adjusted:unadjusted) %>% 
+  mutate(scn = fct_relevel(scn, "unadjusted", "adjusted")) %>% 
+  ungroup() %>% 
+  
+  ggplot(aes(x = year, y = values/1e6))+
+  geom_line(aes(colour = scn, linetype = scn))+
+  facet_wrap(.~iso3, scales = "free_y")+
+  theme_bw()+
+  ylab("Population (in millions)")+
+  xlab("Year")+
+  labs(linetype = "", colour = "") +
+  theme(axis.text.x = element_text(angle = 90))
+```
+
+
+## Change of among scenarios for 2019
+```{r}
+## Print tables
+### Only 2019
+diff_tb_2019 <- 
+ch_impact_samples$diff_tb_2019 %>% 
+  ungroup() %>% 
+  select(-period) %>% 
+  left_join(cov_scenarios$cov_summary %>% select(-year)) %>% 
+  left_join(country_names) %>% 
+  mutate(nat_cov = round(nat_cov * 100)) %>% 
+  mutate(max_cov_y = round(max_cov_y * 100)) %>% 
+  select(name, at_nat_cov, max_cov, at_gvap_cov, nat_cov, max_cov_y) %>% 
+  arrange(name)
+  
+print(xtable(diff_tb_2019, type = "latex"), 
+      file = "diff_impact_scenarios_2019.tex", 
+      include.rownames=FALSE)
+
+write.csv(diff_tb_2019, "diff_impact_scenarios_2019.csv", row.names = FALSE)
+
+### Per period
+diff_tb_2000_2019 <-
+  ch_impact_samples$diff_tb_2000_2019 %>% 
+  ungroup() %>% 
+  left_join(country_names) %>% 
+  select(name, period, at_nat_cov, max_cov, at_gvap_cov) %>% 
+  arrange(name)
+
+print(xtable(diff_tb_2000_2019, type = "latex"), 
+      file = "diff_impact_scenarios_2000_2019.tex", 
+      include.rownames=FALSE)
+
+write.csv(diff_tb_2000_2019, "diff_impact_scenarios_2000_2019.csv", row.names = FALSE)
+
+```
+
+## Sensitivity analysis: Deaths averted vs deaths novac
+```{r}
+impact_df_cohort %>% 
+  mutate(issue = ifelse(deaths_averted_new_mean > deaths_novac_mean, TRUE, FALSE)) %>% 
+  filter(issue == TRUE)
+```
+
+```{r sensitivity_plot}
+max_cov <- 
+impact_df_cohort %>% 
+  filter(scenario == "max_cov") 
+
+d1 <- 
+impact_df_cohort %>% 
+  filter(scenario == "max_cov") %>% 
+  select(iso3, scenario, year, 
+         deaths_averted_new_mean, 
+         deaths_averted_new_q1, 
+         deaths_averted_new_q3)
+
+d2 <- 
+impact_df_cohort %>% 
+  filter(scenario == "max_cov") %>% 
+  select(iso3, scenario, year, 
+         deaths_averted_new_mean = deaths_novac_mean, 
+         deaths_averted_new_q1 = deaths_novac_q1, 
+         deaths_averted_new_q3 = deaths_novac_q3) %>% 
+  mutate(scenario = "novac")
+
+rbind(d1, d2) %>% 
+  plot_ribbons(scen_to_plot = c("novac", "max_cov"), col_pal = col_pal2[1:2])
+```
+
+
+# Specific numbers for the paper
+
+## Global numbers of coverage and impact
+
+```{r}
+cov_scenarios$cov_scenarios_global %>% 
+  datatable(caption = "Global changes of coverage")
+```
+
+```{r}
+
+ch_impact_samples$diff_tb_2019_global %>% 
+  datatable(caption = "Global changes in impact")
+
+```
+
+## National numbers of coverage and impact
+
+### Coverage estimates 
+```{r}
+cov_adjust_samples %>% 
+  ungroup() %>% 
+  filter(year == 2019) %>% 
+  mutate_at(vars(mean_cov, lo_cov, hi_cov), list(~round(.*100,1))) %>% 
+  arrange(mean_cov) %>% 
+  head()
+```
+
+## Impact estimates (text numbers)
+
+### Impact per pop in Nigeria 2019
+```{r}
+impact_df_cohort %>% 
+  filter(year == 2019) %>% 
+  filter(scenario == "sub_cov" & iso3 == "NGA") %>% 
+  mutate_at(vars(contains("deaths_averted")), list(~./pop*1e5))
+```
+
+```{r}
+tab_df_admin1 %>% 
+  filter(period == "2019") %>% 
+  filter(scenario == "sub_cov") %>% 
+  filter(iso3 == "NGA") %>% 
+  arrange(deaths_averted_new_mean) %>% 
+  datatable()
+```
+
+
+### Impact estimates per pop for the 2000-2019 period
+
+```{r}
+tab_df_2000_2019 %>% 
+  datatable()
+```
+
+```{r}
+tab_df_admin1 %>% 
+  filter(period == "2000-2009") %>% 
+  filter(scenario == "sub_cov") %>% 
+  datatable()
+```
+
+### Impact ratios distribution
+
+```{r}
+max_propn <- 
+impact_ratios_dist %>% 
+  ungroup() %>% 
+ distinct(iso3, max_propn_change_mean, max_propn_change_lo, max_propn_change_hi) %>% 
+  mutate_at(vars(contains("max_propn")), ~round(., 2)) %>% 
+  mutate(values = paste0(max_propn_change_mean, 
+                         " (", max_propn_change_lo, "–", 
+                         max_propn_change_hi, ")")) %>% 
+  select(iso_code = iso3, values)
+  
+
+```
+
+```{r IR_time, fig.width = 15}
+impact_ratios %>% 
+  left_join(max_propn) %>% 
+    plot_impact_ratios()
+```
+
+## National vs subnational impact estimates
+
+```{r}
+## National estimates
+tmp <- readRDS("./dat/impact-ratios-cohort-act-strat.rds")
+nal_liveB <- readRDS("./dat/live_birth_under_allcase_under5_mort.rds")
+
+VIMC_nat <- 
+  tmp %>% 
+  group_by(cohort, iso3) %>% 
+  summarise(deaths_averted_mean = mean(deaths_averted_MCV1, na.rm = TRUE), 
+            deaths_averted_q1 = quantile(deaths_averted_MCV1, 0.025, na.rm = TRUE), 
+            deaths_averted_q3 = quantile(deaths_averted_MCV1, 0.975, na.rm = TRUE))%>% 
+  filter(cohort%in%2000:2019) %>% 
+  rename(year = cohort)
+
+nal_liveB <- 
+  nal_liveB %>% 
+  select(iso3, year = cohort, total_pop = pop)
+  
+
+VIMC_nat2 <-
+VIMC_nat %>% 
+  ungroup() %>% 
+  mutate(reference = "National") %>% 
+  left_join(nal_liveB) %>% 
+  mutate(deaths_averted_pop_mean = deaths_averted_mean/total_pop*1e5) %>% 
+  mutate(deaths_averted_pop_q1 = deaths_averted_q1/total_pop*1e5) %>%  
+  mutate(deaths_averted_pop_q3 = deaths_averted_q3/total_pop*1e5)%>% 
+  select(iso3, year, reference, contains("deaths_averted"))
+
+## subnational estimates
+impact_ADM1_pop <- 
+impact_ADM1 %>% 
+  mutate(deaths_averted_pop_mean = deaths_averted_new_mean/total_pop*1e5, 
+         deaths_averted_pop_q1 = deaths_averted_new_q1/total_pop*1e5, 
+         deaths_averted_pop_q3 = deaths_averted_new_q3/total_pop*1e5)
+
+ref1 <- 
+  impact_ADM1_pop %>% 
+  group_by(iso3, year) %>% 
+  summarise(deaths_averted_pop_mean = mean(deaths_averted_pop_mean, na.rm = TRUE), 
+            deaths_averted_pop_q1 = mean(deaths_averted_pop_q1, na.rm = TRUE),
+            deaths_averted_pop_q3 = mean(deaths_averted_pop_q3, na.rm = TRUE),
+            deaths_averted_mean = sum(deaths_averted_new_mean, na.rm = TRUE)) %>% 
+  mutate(reference = "Mean subnational")
+
+```
+
+
+```{r national_vs_subnational_pop}
+VIMC_nat2 %>% 
+  bind_rows(ref1) %>% 
+  filter(iso3 != "STP") %>% 
+    ggplot(aes(y = deaths_averted_pop_mean, x = year, fill = reference))+
+    geom_ribbon(aes(ymin = deaths_averted_pop_q1, ymax = deaths_averted_pop_q3, x = year), 
+                alpha = 0.6)+
+    geom_line(aes(linetype = reference))+
+    facet_wrap(.~iso3, scales = "free_y")+
+    xlab("Year")+
+    ylab("Deaths averted (per 100K)")+
+    theme_bw()+
+    theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+    scale_fill_manual(values = c("grey", "#009ADE"))+
+    scale_color_manual(values = c("grey", "#009ADE"))
+```
+

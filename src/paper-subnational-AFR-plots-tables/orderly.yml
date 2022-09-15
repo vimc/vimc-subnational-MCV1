@@ -1,0 +1,108 @@
+requester: VIMC
+author: Susy Echeverria-Londono
+description: >-
+  Impact estimates under more equitable vaccination scenarios using subnational level coverage in Sub-Saharan Africa
+displayname: Subnational coverage and impact heterogeneity in Sub-Saharan Africa (figures and tables)
+
+connection: 
+  con: source
+  annex: annex
+  
+
+packages: 
+ - dplyr
+ - dbplyr
+ - scales
+ - gt
+ - ggplot2
+ - xtable
+ - DT
+ - readxl
+ - stringi
+ - stringr
+ - foreach
+ - tidyr
+ - cowplot
+ - sf
+ - viridis
+ - wesanderson
+ - forcats
+ - purrr
+ - ggdist
+ - patchwork
+ - gghighlight
+ 
+sources: util.R   
+
+script: script.R
+
+resources:
+  - report.Rmd
+
+artefacts:
+  - report:
+      description: Summary report
+      filenames: report.html
+  - staticgraph:
+        description: Figures
+        filenames:
+          - cov_comparison_plot-1.png
+          - sub_cov_rib-1.png
+          - at_nat_cov_rib-1.png
+          - max_cov_rib-1.png
+          - gvap_cov_rib-1.png
+          - impact_dist-1.png
+          - summary_change_impact-1.png
+          - index_dissimilarity-1.png
+          - rc_all_map-1.png
+          - adjusted_cov_figs-1.png
+          - rc_all_map_2019-1.png
+          - check_adjusted_anadjusted_cov-1.png
+          - check_adjusted_anadjusted_pop-1.png
+          - sensitivity_plot-1.png
+          
+  - data:
+      description: impact estimates tables under the different scenarios of equity
+      filenames:
+        - inequality_values_2000_2019.csv
+        - impact_pop_scenarios_2019.tex
+        - impact_pop_scenarios_2019.csv
+        - impact_pop_scenarios_2000_2019.tex
+        - impact_pop_scenarios_2000_2019.csv
+        - impact_ADM1_2000_2019_per_pop.csv
+        - cov_scenarios_tab_2019.tex
+        - cov_scenarios_tab_2019.csv
+        - cov_scenarios_global_2019.csv
+        - diff_impact_scenarios_2019.tex
+        - diff_impact_scenarios_2019.csv
+        - diff_impact_scenarios_2000_2019.tex
+        - diff_impact_scenarios_2000_2019.csv
+     
+
+depends:
+   paper-subnational-AFR-impact-estimates:
+      id: latest
+      use:
+        dat/processed_pop_dat.RDS: processed_pop_dat.RDS
+        dat/national_coverage_IHME_vs_201910gavi.RDS: national_coverage_IHME_vs_201910gavi.RDS
+        dat/normalised_fvps_coverage.RDS: normalised_fvps_coverage.RDS
+        dat/normalised_coverage_uncertainty.RDS: normalised_coverage_uncertainty.RDS
+        dat/coverage_under_scenarios.RDS: coverage_under_scenarios.RDS
+        dat/impact_ADM1_per_year.csv: impact_ADM1_per_year.csv
+        dat/deaths_averted_rate_ranges.RDS: deaths_averted_rate_ranges.RDS
+        dat/deaths_averted_rate_2000_2019.csv: deaths_averted_rate_2000_2019.csv
+        dat/impact_inequality_scenarios.RDS: impact_inequality_scenarios.RDS
+        dat/glob_rel_ch.RDS: glob_rel_ch.RDS
+        dat/nat_rel_ch.RDS: nat_rel_ch.RDS
+        dat/sub_rel_ch.RDS: sub_rel_ch.RDS
+        dat/Change_impact_national_2019.RDS: Change_impact_national_2019.RDS
+        dat/dissimilarity_2000_2019.RDS: dissimilarity_2000_2019.RDS
+        dat/ch_impact_samples_2019.RDS: ch_impact_samples_2019.RDS
+        dat/AFR_maps.RDS: AFR_maps.RDS
+   subnational-MCV1-201910gavi-impact-ratios-cohort:
+      id: latest
+      use:
+        dat/impact-ratios-cohort-act-strat.rds: impact-ratios-cohort-act-strat.rds
+        dat/live_birth_under_allcase_under5_mort.rds: live_birth_under_allcase_under5_mort.rds 
+        
+        

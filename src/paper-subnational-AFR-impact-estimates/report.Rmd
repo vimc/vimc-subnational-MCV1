@@ -1,0 +1,100 @@
+---
+title: "Impact estimates under different scenarios of coverage heterogeneity in Sub-Saharan Africa"
+author: "Susy Echeverria-Londono"
+output:
+  pdf_document: default
+  html_document: default
+  word_document: default 
+fontsize: 11
+header-includes:
+  \usepackage{fancyhdr}
+  \pagestyle{fancy}
+  \fancyhead[LE,RO]{QCR impact}
+---
+  
+`r as.character(format(Sys.Date(), format="%B %d, %Y"))`
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(cache = FALSE,
+                      error = FALSE,
+                      warning = FALSE,
+                      echo = FALSE,
+                      tidy = FALSE, 
+                      out.width = "\\textwidth")
+options(dplyr.summarise.inform = FALSE)
+```
+
+# Data
+
+First administrative level measles-containing-vaccine first-dose (MCV1) coverage data was extracted for 45 African countries from 2000-2019 from the Institute for Health Metrics and Evaluation (IHME) data portal, the Global Health Data Exchange released in 2020 \cite{IHME2020, local2021mapping}. The first administrative level is the largest sub-division of each country which can vary in area both within and between countries. 
+
+We extracted subnational population data from \url{www.worldpop.org} by age (0-1, 1-4, and 5-80+), and gender for the first administrative level (admin1) for the 45 African countries with available coverage data between 2000-2019. The population for each subnational unit or district was then normalised, so the total population over all the districts matched the country's total population from the 2019 United Nations World Population Prospects (UNWPP) for years 2000 to 2019 \cite{tatem2013millennium,unwpp2019,gadm}. 
+
+We then used this population and the coverage estimates of MCV1 to calculate the number of fully vaccinated people (FVPs), which refers to the total number of doses provided by a vaccination activity. Finally, these estimates of FVPs were scaled up to match the total number of FVPs of a country, year combination from WHO/UNICEF Estimates of National Immunisation Coverage (WUENIC) as published in July 2019 \cite{WHO2019}. This normalisation procedure assures that the mean of subnational coverage estimates matches the national coverage estimates from WUENIC, the reference coverage of the latest impact estimates from the Vaccine Impact Modelling Consortium (VIMC) used in this study. Figures \ref{fig:adjustedPopulation} and \ref{fig:adjustedCoverage} illustrate the differences between the adjusted and unadjusted population and coverage estimates used in this study.
+
+\newpage
+
+# Impact calculation 
+
+In this study, we used the latest immunisation impact estimates for measles available in \cite{toor2021lives}. These estimates are based on two vaccine impact models, the DynaMICE (DYNAmic Measles Immunisation Calculation Engine) \cite{Verguet_etal_2015}, and Penn State model \cite{Chen_Fricks_Ferrari_2012}. Using the mean of the burden estimates from these models, from the no vaccination and MCV1 vaccination scenario, we calculate the number of deaths averted by MCV1 in the 45 African countries used in this study. The mean and 95% credible interval (CrI) values of the deaths averted were computed from the distribution of input parameters and posterior distributions of fitted parameters.
+
+Due to the constant changes in coverage and vaccine impact estimates, as well as their uncertainty, the VIMC developed an impact extrapolation (IE) method \cite{echeverria2021can}, which uses the impact ratios (impact per fully vaccinated person) from the latest modelling estimates to extrapolate the impact calculation (see estimates in Table \ref{tab:Impact_ratios_tab}). In this study, we used this extrapolation method to calculate the impact of MCV1 vaccination at a subnational level. Using the impact ratios from the latest VIMC modelling estimates of impact (i.e., from \cite{toor2021lives}), we calculate the impact of MCV1 vaccination $I(s, y)$, defined in this study as deaths averted in district $s$, at year $y$ as: 
+
+\begin{equation} \label{eq:1}
+    I(s,y) = \rho(c,k) \times \text{FVP}(s,k,y),
+\end{equation}
+
+where $\rho(c, k)$ corresponds to the country ($c$) modelled impact ratios or deaths averted rate per birth cohort ($k$), and $\text{FVP}(s, k, y)$ describes the number of fully vaccinated persons at year ($y$) in district $s$, which is calculated as the coverage in year ($y$) $\times$ the size of the cohorts ($k$) vaccinated in year ($y$). The final impact estimates $I(s, y)$ denote the total current and future deaths averted, due to long terms effects of MCV1 vaccination, attributed to the MCV1 vaccination activities occurring in the year ($y$).
+
+Assuming that the impact ratios within a country vary proportionally with vaccination coverage; a factor that is highlighted in estimates of measles case fatality ratio \cite{portnoy2019estimates}, we calculate the impact ratios at district level using the range of the maximum and minimum impact ratios achieved in a country for the year range 2000-2019 (see figure \ref{fig:IR_time}). As such we define the impact ratio for a district $d$ to be:
+
+\begin{equation}
+    \rho_{d} = \rho \times \bigg(1 - \big(\frac{C_{d} - C_{mean}}{C_{mean}}\big)\Theta \bigg),
+\end{equation}
+
+\noindent where $\rho$ is the national impact ratio, $\rho_d$ is the district impact ratio, $C_d$ is the district coverage, $C_{mean}$ is the mean/national coverage and $\Theta$ is the maximum proportional change informed by the historic national extrema. For example, if a district has 60\% coverage, the mean/national coverage is 80\%, the maximum proportional change is 10\% and the national impact ratio is 0.1; the district impact ratio would be 0.1025. This means we assume that impact would be higher in areas of lower coverage. 
+
+```{r impact_ratios}
+## Plot impact ratios under different stratifications
+col_pal <- c("grey", wes_palette("Zissou1"))
+impact_df_cohort$scenario <- fct_relevel(impact_df_cohort$scenario, "VIMC")
+
+## Calculate impact ratios
+da_rate_all %>% 
+  filter(vaccine == "MCV1") %>% 
+  filter(country%in%c("ETH", "SSD", "AGO")) %>% 
+  group_by(country, year, vaccine, stratification) %>% 
+  summarise(impact_ratio_mean = mean(impact_ratio, na.rm = TRUE), 
+            impact_ratio_q1 =  quantile(impact_ratio, 0.025, na.rm = TRUE), 
+            impact_ratio_q3 = quantile(impact_ratio, 0.975, na.rm = TRUE)) %>% 
+  
+  ggplot(aes(y = impact_ratio_mean, x = year, fill = stratification))+
+  geom_ribbon(aes(ymin = impact_ratio_q1, ymax = impact_ratio_q3, x = year), 
+              alpha = 0.4)+
+  geom_line(aes(colour = stratification))+
+  facet_wrap(country~stratification)+
+  xlab("Year")+
+  ylab("Impact ratios")+
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))
+```
+
+
+# Sub-national deaths averted under different coverage scenarios
+
+We explore the change in deaths averted each country might have under the following scenarios of more equitable coverage: 
+
+1. Optimistic (max_cov): Assumes that the highest coverage among districts in a specific year was achieved in all the districts. Ideal but unrealistic. 
+
+2. Ideal (at_nat_cov): Assumes that none of the districts have a coverage that is lower than the one at national level, i.e., if a district has a coverage of MCV1 lower than the one at national level, then assuming that the district achieved the national level coverage. 
+
+3. Target level or threshold scenario (at_gvap_cov): Assumes that all districts achieve a specific target or threshold coverage. In this scenario, we describe the total health improvement expected at national level if all regions or districts achieved at least 80% coverage, which is the sub-national target coverage from the Global Vaccine Action Plan (GVAP) (ref https://www.who.int/publications/i/item/global-vaccine-action-plan-monitoring-evaluation-accountability-secretariat-annual-report-2020). 
+
+
+## Dissimilarity index to measure inequality through time
+
+We used the dissimilarity index as describe in https://doi.org/10.1186/s12939-016-0307-y to calculate the changes in inequality of deaths averted through time. This index estimates the proportion of people that would have to move to a different region to reach a uniform distribution of impact across a population. This dissimilarity index $DI(c, y)$ was calculated per country $c$ and year $y$ as: 
+
+$DI(c, y) = 0.5\times \sum|\frac{I_{ry}}{I_{\mu y}} \times \frac{pop_{ry}}{pop_y} - \frac{pop_{ry}}{pop_y}|\times100$
+
+where $I_{ry}$ corresponds to the impact or deaths averted in region $r$ and year $y$, $I_{\mu y}$ is the mean impact across all regions of country $c$ and year $y$; $pop_{ry}$ is the population of the region $r$ in year $y$, and finally, $pop_y$ is the total population of the country $c$ in year $y$.

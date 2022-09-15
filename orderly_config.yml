@@ -1,0 +1,15 @@
+database:
+ 
+
+fields:
+  requester:
+    required: true
+  author:
+    required: true
+  comment:
+    required: false
+
+
+global_resources:
+  globals
+

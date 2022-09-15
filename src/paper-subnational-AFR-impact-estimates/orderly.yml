@@ -1,0 +1,91 @@
+requester: VIMC
+author: Susy Echeverria-Londono
+description: >-
+  Impact estimates under more equitable vaccination scenarios using subnational level coverage in Sub-Saharan Africa
+displayname: Impact estimates under different scenarios of coverage heterogeneity in Sub-Saharan Africa
+
+connection: 
+  con: source
+  annex: annex
+  
+
+packages: 
+ - dplyr
+ - dbplyr
+ - scales
+ - gt
+ - ggplot2
+ - xtable
+ - DT
+ - readxl
+ - stringi
+ - stringr
+ - foreach
+ - tidyr
+ - cowplot
+ - sf
+ - viridis
+ - wesanderson
+ - forcats
+ - purrr
+ - ggdist
+ - patchwork
+ 
+sources: util.R   
+
+script: script.R
+
+resources:
+  - report.Rmd
+  # Taken from https://data.humdata.org/dataset/world-sub-national-immunization-coverage (last updated 	27 May 2020)
+  - dat/Vaccine coverage at subnational level.xlsx
+  - dat/mcv1_cov_draws_vimc_countries.RDS
+  - dat/adm1_names_variations.csv
+  - dat/AF_shp.RDS
+  - dat/AFR_map_smooth.RDS
+  - dat/mwi_adm1.RDS
+  
+global_resources:
+  R/get_estimates_annex.R: get_estimates_annex.R
+  
+artefacts:
+  - report:
+      description: Summary report
+      filenames: report.html
+  - data:
+      description: impact estimates tables under the different scenarios of equity
+      filenames:
+        - processed_pop_dat.RDS
+        - national_coverage_IHME_vs_201910gavi.RDS
+        - normalised_fvps_coverage.RDS
+        - normalised_coverage_uncertainty.RDS
+        - coverage_under_scenarios.RDS
+        - deaths_averted_rate_2000_2019.csv
+        - deaths_averted_rate_ranges.RDS
+        - deaths_averted_rate_period.csv
+        - deaths_averted_rate_period.tex
+        - impact_inequality_scenarios.RDS
+        - glob_rel_ch.RDS
+        - nat_rel_ch.RDS
+        - sub_rel_ch.RDS
+        - impact_ADM1_per_year.csv
+        - Change_impact_national_2019.RDS
+        - dissimilarity_2000_2019.RDS
+        - ch_impact_samples_2019.RDS
+        - AFR_maps.RDS
+
+
+depends:
+   subnational-coverage-MCV1-DTP13-YF:
+      id: latest
+      use:
+        dat/MCV1_vax_cov_2000_2019_Africa_gadm36.RDS: MCV1_vax_cov_2000_2019_Africa_gadm36.RDS
+        dat/YF_vax_cov_2000_2019_Africa_gadm36.RDS: YF_vax_cov_2000_2019_Africa_gadm36.RDS
+        dat/DTP1_3_vax_cov_2000_2016_Africa_gadm36.RDS: DTP1_3_vax_cov_2000_2016_Africa_gadm36.RDS
+        dat/Pop_ADMIN1_Africa_gadm36.RDS: Pop_ADMIN1_Africa_gadm36.RDS
+   subnational-MCV1-201910gavi-impact-ratios-cohort:
+      id: latest
+      use:
+        dat/impact-ratios-cohort-act-strat.rds: impact-ratios-cohort-act-strat.rds
+        dat/live_birth_under_allcase_under5_mort.rds: live_birth_under_allcase_under5_mort.rds 
+  
